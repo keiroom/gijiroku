@@ -34,11 +34,13 @@
     }
   };
 
-  const ready = () => usesProxy() || !!Key.get();
+  // 中継サーバー利用時：Key には「利用コード」を保持し、中継サーバーへ送る
+  const ready = () => !!Key.get();
 
   function headers(extra) {
     const h = Object.assign({}, extra || {});
-    if (!usesProxy()) h["x-goog-api-key"] = Key.get();
+    if (usesProxy()) h["X-Access-Code"] = Key.get();
+    else h["x-goog-api-key"] = Key.get();
     return h;
   }
 
@@ -52,7 +54,8 @@
     catch (_) { try { detail = await res.text(); } catch (__) {} }
     const s = res.status;
     let msg;
-    if (s === 400 && /api key/i.test(detail)) msg = "接続キーが正しくありません。設定画面でキーを確認してください。";
+    if (s === 401 && usesProxy()) msg = "利用コードが正しくないか、利用が停止されています。設定画面で利用コードを確認してください。";
+    else if (s === 400 && /api key/i.test(detail)) msg = "接続キーが正しくありません。設定画面でキーを確認してください。";
     else if (s === 400) msg = "送信した内容を処理できませんでした。ファイルの形式や大きさを確認してください。";
     else if (s === 401 || s === 403) msg = "接続が許可されませんでした。接続キーの権限、または利用契約を確認してください。";
     else if (s === 404) msg = "指定したモデルが見つかりません。設定画面の「使用するモデル」を「自動選択」にしてください。";

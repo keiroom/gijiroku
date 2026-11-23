@@ -54,8 +54,10 @@
 2. Worker の設定で変数を登録
    - `GEMINI_API_KEY`（シークレット）：API キー
    - `ALLOWED_ORIGIN`：`https://<ユーザー名>.github.io`
+   - `ACCESS_CODES`（シークレット）：利用コード。`名前:コード` をカンマ区切りで並べると、人ごとに発行・停止できる（例：`sato:K7m2Qx9P,suzuki:R4t8Wn2L`）
 3. `config.js` の `PROXY_URL` に Worker の URL を設定
-4. `*.workers.dev` 以外のドメインにした場合は `index.html` の `connect-src` に追記
+4. 利用者には、アプリの URL と本人用の利用コードを伝える（利用者は「設定」に利用コードを入れるだけ）
+5. `*.workers.dev` 以外のドメインにした場合は `index.html` の `connect-src` に追記
 
 ※ Cloudflare 無料プランは1回の送信が 100MB までです。それ以上の音声は方法Aを使うか、圧縮してください。
 

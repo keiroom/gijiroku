@@ -34,8 +34,8 @@
 <div class="notice notice--warn" id="setupNotice" hidden>
   <div class="notice__inner">
     <strong>初期設定が必要です。</strong>
-    議事録を作成するには、管理者から配布された接続キーを登録してください。
-    <button type="button" class="btn btn--sm btn--primary" id="btnSetupNow">接続キーを登録する</button>
+    <span id="setupText">議事録を作成するには、管理者から配布された接続キーを登録してください。</span>
+    <button type="button" class="btn btn--sm btn--primary" id="btnSetupNow">登録する</button>
   </div>
 </div>
 
@@ -351,10 +351,10 @@
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
     <h2 class="dialog__title" id="settingsTitle">設定</h2>
     <div class="dialog__body">
-      <div id="proxyInfo" class="notice-inline" hidden>このツールは社内の中継サーバー経由で接続するよう設定されています。接続キーの登録は不要です。</div>
+      <div id="proxyInfo" class="notice-inline" hidden>このツールは中継サーバー経由で接続します。管理者から伝えられた<strong>利用コード</strong>を入力してください。</div>
       <div id="keySection">
         <div class="field">
-          <label class="field__label" for="apiKey">接続キー（Gemini API キー）</label>
+          <label class="field__label" for="apiKey" id="apiKeyLabel">接続キー（Gemini API キー）</label>
           <div class="input-group">
             <input type="password" id="apiKey" class="input input--mono" autocomplete="off" spellcheck="false" placeholder="管理者から配布されたキーを貼り付け">
             <button type="button" class="btn btn--secondary" id="btnToggleKey">表示</button>
@@ -380,7 +380,7 @@
       <div class="test-result" id="testResult" hidden></div>
     </div>
     <div class="dialog__foot">
-      <button type="button" class="btn btn--text" id="btnKeyDelete">キーを削除</button>
+      <button type="button" class="btn btn--text" id="btnKeyDelete">登録を削除</button>
       <span class="spacer"></span>
       <button type="button" class="btn btn--secondary" id="btnTestKey">接続テスト</button>
       <button type="button" class="btn btn--secondary" id="btnSettingsClose">閉じる</button>

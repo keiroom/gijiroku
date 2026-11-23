@@ -716,12 +716,18 @@
   }
 
   /* ================= 設定 ================= */
-  function refreshSetupNotice() { $("#setupNotice").hidden = API.ready(); }
+  function refreshSetupNotice() {
+    $("#setupText").textContent = API.usesProxy()
+      ? "議事録を作成するには、管理者から伝えられた利用コードを登録してください。"
+      : "議事録を作成するには、管理者から配布された接続キーを登録してください。";
+    $("#setupNotice").hidden = API.ready();
+  }
 
   function openSettings(fromGenerate) {
     const proxy = API.usesProxy();
     $("#proxyInfo").hidden = !proxy;
-    $("#keySection").hidden = proxy;
+    $("#apiKeyLabel").textContent = proxy ? "利用コード" : "接続キー（Gemini API キー）";
+    $("#apiKey").placeholder = proxy ? "管理者から伝えられた利用コードを入力" : "管理者から配布されたキーを貼り付け";
     $("#apiKey").value = API.Key.get();
     $("#apiKey").type = "password";
     $("#btnToggleKey").textContent = "表示";
@@ -737,9 +743,9 @@
     if (fromGenerate) {
       $("#testResult").hidden = false;
       $("#testResult").className = "test-result is-run";
-      $("#testResult").textContent = "議事録を作成するには、先に接続キーを登録してください。";
+      $("#testResult").textContent = `議事録を作成するには、先に${proxy ? "利用コード" : "接続キー"}を登録してください。`;
     }
-    setTimeout(() => (proxy ? $("#btnSettingsClose") : $("#apiKey")).focus(), 50);
+    setTimeout(() => $("#apiKey").focus(), 50);
   }
 
   function bindSettings() {
@@ -752,9 +758,8 @@
       $("#btnToggleKey").textContent = i.type === "password" ? "表示" : "隠す";
     });
     const saveKey = () => {
-      if (API.usesProxy()) return true;
       const k = $("#apiKey").value.trim();
-      if (!k) { showTest("ng", "接続キーを入力してください。"); return false; }
+      if (!k) { showTest("ng", API.usesProxy() ? "利用コードを入力してください。" : "接続キーを入力してください。"); return false; }
       API.Key.set(k, $('input[name="keyStore"]:checked').value === "local");
       return true;
     };
@@ -769,7 +774,7 @@
       API.Key.clear();
       $("#apiKey").value = "";
       refreshSetupNotice();
-      showTest("run", "このブラウザから接続キーを削除しました。");
+      showTest("run", `このブラウザから${API.usesProxy() ? "利用コード" : "接続キー"}を削除しました。`);
     });
     $("#btnTestKey").addEventListener("click", async () => {
       if (!saveKey()) return;
