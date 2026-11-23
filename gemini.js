@@ -107,9 +107,14 @@
       return m ? { id, ver: +m[1] + (+(m[2] || 0)) / 100, tier: m[3] } : null;
     };
     const parsed = models.map((m) => parse(m.id)).filter(Boolean);
-    for (const tier of pref) {
-      const c = parsed.filter((p) => p.tier === tier).sort((a, b) => b.ver - a.ver);
-      if (c.length) return c[0].id;
+    if (parsed.length) {
+      // 最新の世代を優先し、同じ世代の中で pro / flash の優先順に従う（古い pro より新しい flash を選ぶ）
+      const top = Math.max(...parsed.map((p) => p.ver));
+      const latest = parsed.filter((p) => p.ver === top);
+      for (const tier of pref) {
+        const c = latest.find((p) => p.tier === tier);
+        if (c) return c.id;
+      }
     }
     // 安定版がなければプレビュー版も候補に
     const loose = models.map((m) => m.id).filter((id) => /^gemini-[\d.]+-(pro|flash)(-preview)?$/.test(id)).sort().reverse();
