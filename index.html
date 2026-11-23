@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<!--
+  通信先の制限：このページが通信できるのは自分自身と Google の Gemini API のみ。
+  中継サーバー（proxy/）を使う場合は、その URL を connect-src に追記してください。
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://generativelanguage.googleapis.com https://*.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>議事録作成ツール</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar__inner">
+    <div class="appbar__title">
+      <span class="appbar__mark" aria-hidden="true"></span>
+      <span id="appName">議事録作成ツール</span>
+    </div>
+    <div class="appbar__right">
+      <span class="privacy-badge" title="入力した内容と作成した議事録は、どこにも保存されません。画面を閉じると消去されます。">
+        <span class="privacy-badge__dot" aria-hidden="true"></span>データ非保存
+      </span>
+      <button type="button" class="btn btn--ghost-inv" id="btnHelp">使い方</button>
+      <button type="button" class="btn btn--ghost-inv" id="btnSettings">設定</button>
+    </div>
+  </div>
+</header>
+
+<div class="notice notice--warn" id="setupNotice" hidden>
+  <div class="notice__inner">
+    <strong>初期設定が必要です。</strong>
+    議事録を作成するには、管理者から配布された接続キーを登録してください。
+    <button type="button" class="btn btn--sm btn--primary" id="btnSetupNow">接続キーを登録する</button>
+  </div>
+</div>
+
+<!-- ============ 入力画面 ============ -->
+<main class="layout" id="viewInput">
+  <nav class="stepnav" aria-label="入力の手順">
+    <ol>
+      <li><a href="#sec-template" data-step="template"><span class="stepnav__no">1</span><span class="stepnav__label">テンプレート</span><span class="stepnav__state" data-state-for="template">任意</span></a></li>
+      <li><a href="#sec-meeting" data-step="meeting"><span class="stepnav__no">2</span><span class="stepnav__label">会議情報・参加者</span><span class="stepnav__state" data-state-for="meeting">任意</span></a></li>
+      <li><a href="#sec-source" data-step="source"><span class="stepnav__no">3</span><span class="stepnav__label">議事録のもと</span><span class="stepnav__state is-required" data-state-for="source">必須</span></a></li>
+      <li><a href="#sec-generate" data-step="generate"><span class="stepnav__no">4</span><span class="stepnav__label">作成</span></a></li>
+    </ol>
+    <button type="button" class="btn btn--text btn--sm stepnav__clear" id="btnClearAll">入力をすべて消去</button>
+  </nav>
+
+  <div class="content">
+
+    <!-- 1. テンプレート -->
+    <section class="panel" id="sec-template">
+      <header class="panel__head">
+        <span class="panel__no">1</span>
+        <div>
+          <h2 class="panel__title">議事録のテンプレート</h2>
+          <p class="panel__desc">社内で使っている議事録の書式ファイルを選ぶと、その形式に合わせて作成します。選ばない場合は標準形式で作成します。</p>
+        </div>
+      </header>
+      <div class="panel__body">
+        <div class="field" id="presetField" hidden>
+          <label class="field__label" for="presetSelect">登録済みのテンプレート</label>
+          <select id="presetSelect" class="input"></select>
+        </div>
+
+        <div class="dropzone" id="templateDrop" tabindex="0" role="button" aria-describedby="templateHint">
+          <input type="file" id="templateFile" accept=".docx,.xlsx,.xls,.pdf,.txt,.md,.csv" hidden>
+          <div class="dropzone__main">ファイルをここにドラッグ、または<span class="link-like">クリックして選択</span></div>
+          <div class="dropzone__hint" id="templateHint">対応形式：Word（.docx）／Excel（.xlsx）／PDF／テキスト（.txt）</div>
+        </div>
+
+        <div class="filecard" id="templateCard" hidden>
+          <div class="filecard__icon" id="templateIcon">DOC</div>
+          <div class="filecard__meta">
+            <div class="filecard__name" id="templateName"></div>
+            <div class="filecard__sub" id="templateSub"></div>
+          </div>
+          <button type="button" class="btn btn--sm btn--secondary" id="btnTemplatePreview">内容を確認</button>
+          <button type="button" class="btn btn--sm btn--text" id="btnTemplateRemove">取り消す</button>
+        </div>
+        <div class="template-preview" id="templatePreview" hidden></div>
+      </div>
+    </section>
+
+    <!-- 2. 会議情報 -->
+    <section class="panel" id="sec-meeting">
+      <header class="panel__head">
+        <span class="panel__no">2</span>
+        <div>
+          <h2 class="panel__title">会議情報・参加者</h2>
+          <p class="panel__desc">すべて任意です。入力した内容は議事録にそのまま使われ、発言者の聞き分けの精度も上がります。</p>
+        </div>
+      </header>
+      <div class="panel__body">
+        <div class="grid grid--2">
+          <div class="field">
+            <label class="field__label" for="mtgTitle">会議名</label>
+            <input type="text" id="mtgTitle" class="input" placeholder="例：第3回 営業戦略会議" autocomplete="off">
+          </div>
+          <div class="field">
+            <label class="field__label" for="mtgPlace">場所・形式</label>
+            <input type="text" id="mtgPlace" class="input" placeholder="例：本社 3F 会議室A／オンライン" autocomplete="off">
+          </div>
+          <div class="field">
+            <label class="field__label" for="mtgDate">日付</label>
+            <input type="date" id="mtgDate" class="input">
+          </div>
+          <div class="field field--inline">
+            <div>
+              <label class="field__label" for="mtgStart">開始</label>
+              <input type="time" id="mtgStart" class="input">
+            </div>
+            <span class="field__sep">〜</span>
+            <div>
+              <label class="field__label" for="mtgEnd">終了</label>
+              <input type="time" id="mtgEnd" class="input">
+            </div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="mtgAuthor">記録者</label>
+            <input type="text" id="mtgAuthor" class="input" placeholder="例：総務部 山田" autocomplete="off">
+          </div>
+          <div class="field">
+            <label class="field__label" for="mtgDetail">まとめ方</label>
+            <select id="mtgDetail" class="input">
+              <option value="concise">簡潔（要点と決定事項中心）</option>
+              <option value="standard" selected>標準</option>
+              <option value="detailed">詳細（議論の経緯も残す）</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="subhead">
+          <h3>参加者・話者（最大10名）</h3>
+          <span class="subhead__note">入力した名前で発言者を記録します。空欄の行は使われません。</span>
+        </div>
+        <div class="speaker-table" role="table" aria-label="参加者一覧">
+          <div class="speaker-row speaker-row--head" role="row">
+            <span role="columnheader">No.</span>
+            <span role="columnheader">氏名</span>
+            <span role="columnheader">所属・役職</span>
+            <span role="columnheader">役割</span>
+          </div>
+          <div id="speakerRows"></div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="mtgGlossary">社内用語・固有名詞（任意）</label>
+          <textarea id="mtgGlossary" class="input" rows="2" placeholder="例：商品名、取引先名、社内略語など。読み間違えやすい言葉を書いておくと、正しい表記で記録されます。"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 議事録のもと -->
+    <section class="panel" id="sec-source">
+      <header class="panel__head">
+        <span class="panel__no">3</span>
+        <div>
+          <h2 class="panel__title">議事録のもとになる内容</h2>
+          <p class="panel__desc">手元にあるものを1つ以上入れてください。複数入れると、組み合わせて作成します。</p>
+        </div>
+      </header>
+      <div class="panel__body">
+        <div class="tabs" role="tablist">
+          <button type="button" class="tabs__tab is-active" role="tab" aria-selected="true" data-tab="audio">音声<span class="tabs__count" data-count-for="audio"></span></button>
+          <button type="button" class="tabs__tab" role="tab" aria-selected="false" data-tab="transcript">文字起こし<span class="tabs__count" data-count-for="transcript"></span></button>
+          <button type="button" class="tabs__tab" role="tab" aria-selected="false" data-tab="memo">メモ<span class="tabs__count" data-count-for="memo"></span></button>
+        </div>
+
+        <div class="tabpanel" data-panel="audio">
+          <div class="split">
+            <div class="dropzone dropzone--compact" id="audioDrop" tabindex="0" role="button">
+              <input type="file" id="audioFile" accept="audio/*,video/mp4,video/webm,.m4a,.mp3,.wav,.aac,.flac,.ogg,.webm,.mp4" hidden>
+              <div class="dropzone__main">録音ファイルを<span class="link-like">選択</span></div>
+              <div class="dropzone__hint">mp3／m4a／wav／mp4 など</div>
+            </div>
+            <div class="recorder" id="recorder">
+              <div class="recorder__time" id="recTime">00:00:00</div>
+              <div class="recorder__ctrl">
+                <button type="button" class="btn btn--secondary" id="btnRecStart"><span class="rec-dot" aria-hidden="true"></span>この場で録音</button>
+                <button type="button" class="btn btn--secondary" id="btnRecPause" hidden>一時停止</button>
+                <button type="button" class="btn btn--primary" id="btnRecStop" hidden>録音を終了</button>
+              </div>
+              <div class="recorder__hint" id="recHint">パソコンのマイクで会議を録音します。録音データは保存されません。</div>
+              <div class="recorder__tip">発言者を正確に記録するコツ：会議の冒頭で一人ずつ名前を名乗る、発言を求めるときは「〇〇さん、どうですか」と名前で呼ぶ。</div>
+            </div>
+          </div>
+          <div class="filecard" id="audioCard" hidden>
+            <div class="filecard__icon filecard__icon--audio">音声</div>
+            <div class="filecard__meta">
+              <div class="filecard__name" id="audioName"></div>
+              <div class="filecard__sub" id="audioSub"></div>
+            </div>
+            <audio id="audioPlayer" controls preload="metadata"></audio>
+            <button type="button" class="btn btn--sm btn--text" id="btnAudioRemove">取り消す</button>
+          </div>
+        </div>
+
+        <div class="tabpanel" data-panel="transcript" hidden>
+          <div class="toolbar">
+            <button type="button" class="btn btn--sm btn--secondary" id="btnTranscriptFile">ファイルから読み込む</button>
+            <input type="file" id="transcriptFile" accept=".txt,.vtt,.srt,.docx,.md,.csv" hidden>
+            <span class="toolbar__hint">Teams・Zoom の文字起こし（.vtt／.docx）やテキストに対応</span>
+          </div>
+          <textarea id="srcTranscript" class="input input--mono" rows="12" placeholder="会議の文字起こしを貼り付けてください。"></textarea>
+          <div class="charcount" data-charcount-for="srcTranscript"></div>
+        </div>
+
+        <div class="tabpanel" data-panel="memo" hidden>
+          <div class="toolbar">
+            <button type="button" class="btn btn--sm btn--secondary" id="btnMemoFile">ファイルから読み込む</button>
+            <input type="file" id="memoFile" accept=".txt,.md,.docx" hidden>
+            <span class="toolbar__hint">箇条書きの走り書きでも構いません</span>
+          </div>
+          <textarea id="srcMemo" class="input" rows="12" placeholder="会議中に取ったメモを貼り付けてください。&#10;例）&#10;・新商品の発売は4月に決定&#10;・価格は次回までに佐藤さんが再検討"></textarea>
+          <div class="charcount" data-charcount-for="srcMemo"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 作成 -->
+    <section class="panel panel--action" id="sec-generate">
+      <header class="panel__head">
+        <span class="panel__no">4</span>
+        <div>
+          <h2 class="panel__title">議事録を作成</h2>
+          <p class="panel__desc">作成後、画面上で内容を確認・修正してから Word などで保存できます。</p>
+        </div>
+      </header>
+      <div class="panel__body">
+        <ul class="checklist" id="checklist"></ul>
+        <label class="checkbox">
+          <input type="checkbox" id="optSpeakerCheck" checked>
+          <span>発言者を確認してから作成する（音声・文字起こしから推定した発言者を、作成前に一覧で確認・修正できます）</span>
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="optVerify" checked>
+          <span>精度優先（作成後に元の内容と照らし合わせて見直します。時間は少し長くかかります）</span>
+        </label>
+        <div class="action-row">
+          <button type="button" class="btn btn--primary btn--lg" id="btnGenerate" disabled>議事録を作成する</button>
+          <span class="action-row__note" id="generateNote">議事録のもとになる内容を入れてください</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- ============ 結果画面 ============ -->
+<main class="result" id="viewResult" hidden>
+  <div class="result__bar">
+    <button type="button" class="btn btn--secondary" id="btnBack">← 入力に戻る</button>
+    <div class="result__bar-title">作成結果<span class="result__bar-sub">本文をクリックすると直接修正できます</span></div>
+    <div class="result__bar-actions">
+      <button type="button" class="btn btn--secondary" id="btnRegenerate">作り直す</button>
+      <button type="button" class="btn btn--secondary" id="btnCopy">コピー</button>
+      <div class="menu">
+        <button type="button" class="btn btn--primary" id="btnExport" aria-haspopup="true" aria-expanded="false">保存 ▾</button>
+        <div class="menu__list" id="exportMenu" role="menu" hidden>
+          <button type="button" role="menuitem" data-export="docx">Word（.docx）</button>
+          <button type="button" role="menuitem" data-export="pdf">PDF（印刷画面から保存）</button>
+          <button type="button" role="menuitem" data-export="txt">テキスト（.txt）</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="result__body">
+    <article class="paper" id="docPaper">
+      <div class="paper__content" id="docContent" contenteditable="true" spellcheck="false"></div>
+    </article>
+
+    <aside class="result__side">
+      <section class="sidecard" id="reviewCard">
+        <h3 class="sidecard__title">確認してほしい箇所 <span class="count-pill" id="reviewCount">0</span></h3>
+        <p class="sidecard__desc">元の内容だけでは判断できなかった点です。本文中の <mark class="needs-check">【要確認】</mark> と合わせて確認してください。</p>
+        <ol class="review-list" id="reviewList"></ol>
+      </section>
+      <section class="sidecard" id="speakerCard" hidden>
+        <h3 class="sidecard__title">発言者の割り当て</h3>
+        <ul class="speaker-summary" id="speakerSummary"></ul>
+        <div class="sidecard__actions">
+          <button type="button" class="btn btn--sm btn--secondary" id="btnEditSpeakers">変更して作り直す</button>
+        </div>
+      </section>
+      <section class="sidecard" id="transcriptCard" hidden>
+        <h3 class="sidecard__title">音声の文字起こし</h3>
+        <p class="sidecard__desc">議事録の根拠として使った文字起こしです。</p>
+        <div class="sidecard__actions">
+          <button type="button" class="btn btn--sm btn--secondary" id="btnShowTranscript">表示する</button>
+          <button type="button" class="btn btn--sm btn--text" id="btnSaveTranscript">テキストで保存</button>
+        </div>
+      </section>
+      <section class="sidecard sidecard--muted">
+        <h3 class="sidecard__title">ご注意</h3>
+        <p class="sidecard__desc">自動作成した議事録には誤りが含まれる場合があります。配布前に必ず内容をご確認ください。この画面を閉じると内容は消去されます。</p>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<!-- ============ 進行状況 ============ -->
+<div class="overlay" id="progressOverlay" hidden>
+  <div class="dialog dialog--progress" role="dialog" aria-modal="true" aria-labelledby="progressTitle">
+    <h2 class="dialog__title" id="progressTitle">議事録を作成しています</h2>
+    <ol class="progress-steps" id="progressSteps"></ol>
+    <div class="progress-meta">
+      <span>経過時間 <strong id="progressElapsed">0:00</strong></span>
+      <span class="progress-meta__note" id="progressNote">画面を閉じずにお待ちください</span>
+    </div>
+    <div class="dialog__foot">
+      <button type="button" class="btn btn--secondary" id="btnCancel">中止する</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 発言者の確認 ============ -->
+<div class="overlay" id="speakerOverlay" hidden>
+  <div class="dialog dialog--xwide" role="dialog" aria-modal="true" aria-labelledby="spkTitle">
+    <h2 class="dialog__title" id="spkTitle">発言者の確認</h2>
+    <div class="dialog__body">
+      <p class="dialog__lead">記録の内容（名前の呼びかけ・自己紹介・役割など）から、各話者が誰かを推定しました。<strong>違っている場合だけ選び直してください。</strong>分からない場合は「特定しない」のままで構いません（議事録には「話者A」などと記載されます）。</p>
+      <div class="spk-table" role="table" aria-label="発言者の割り当て">
+        <div class="spk-row spk-row--head" role="row">
+          <span role="columnheader">話者</span>
+          <span role="columnheader">発言の例</span>
+          <span role="columnheader">割り当て</span>
+          <span role="columnheader">推定の根拠</span>
+        </div>
+        <div id="spkRows"></div>
+      </div>
+      <p class="spk-warn" id="spkWarn" hidden></p>
+    </div>
+    <div class="dialog__foot">
+      <button type="button" class="btn btn--secondary" id="btnSpkCancel">中止する</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn--text" id="btnSpkSkip">発言者を特定せずに作成</button>
+      <button type="button" class="btn btn--primary" id="btnSpkOk">この内容で議事録を作成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 設定 ============ -->
+<div class="overlay" id="settingsOverlay" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <h2 class="dialog__title" id="settingsTitle">設定</h2>
+    <div class="dialog__body">
+      <div id="proxyInfo" class="notice-inline" hidden>このツールは社内の中継サーバー経由で接続するよう設定されています。接続キーの登録は不要です。</div>
+      <div id="keySection">
+        <div class="field">
+          <label class="field__label" for="apiKey">接続キー（Gemini API キー）</label>
+          <div class="input-group">
+            <input type="password" id="apiKey" class="input input--mono" autocomplete="off" spellcheck="false" placeholder="管理者から配布されたキーを貼り付け">
+            <button type="button" class="btn btn--secondary" id="btnToggleKey">表示</button>
+          </div>
+        </div>
+        <fieldset class="field">
+          <legend class="field__label">キーの保持</legend>
+          <label class="radio"><input type="radio" name="keyStore" value="session" checked> この画面を閉じるまで（推奨）</label>
+          <label class="radio"><input type="radio" name="keyStore" value="local"> このパソコンのブラウザに記憶する（共用パソコンでは使用しないでください）</label>
+        </fieldset>
+      </div>
+      <details class="details">
+        <summary>詳細設定（管理者向け）</summary>
+        <div class="field">
+          <label class="field__label" for="modelSelect">使用するモデル</label>
+          <div class="input-group">
+            <select id="modelSelect" class="input"><option value="">自動選択（推奨）</option></select>
+            <button type="button" class="btn btn--secondary" id="btnLoadModels">一覧を取得</button>
+          </div>
+          <p class="field__help" id="modelHelp"></p>
+        </div>
+      </details>
+      <div class="test-result" id="testResult" hidden></div>
+    </div>
+    <div class="dialog__foot">
+      <button type="button" class="btn btn--text" id="btnKeyDelete">キーを削除</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn--secondary" id="btnTestKey">接続テスト</button>
+      <button type="button" class="btn btn--secondary" id="btnSettingsClose">閉じる</button>
+      <button type="button" class="btn btn--primary" id="btnSettingsSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 汎用ダイアログ ============ -->
+<div class="overlay" id="infoOverlay" hidden>
+  <div class="dialog dialog--wide" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+    <h2 class="dialog__title" id="infoTitle"></h2>
+    <div class="dialog__body" id="infoBody"></div>
+    <div class="dialog__foot" id="infoFoot">
+      <span class="spacer"></span>
+      <button type="button" class="btn btn--primary" id="btnInfoClose">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<template id="helpTemplate">
+  <ol class="help-steps">
+    <li><strong>テンプレートを選ぶ（任意）</strong><br>会社の議事録の書式ファイル（Word・Excel・PDF）を選びます。見出しや表の形をそのまま再現します。</li>
+    <li><strong>会議情報と参加者を入れる（任意）</strong><br>会議名や参加者の名前を入れると、議事録にそのまま記載され、誰の発言かの判別も正確になります。</li>
+    <li><strong>議事録のもとを入れる</strong><br>「音声」「文字起こし」「メモ」のどれか1つ以上を入れます。音声はこの画面で録音することもできます。</li>
+    <li><strong>「議事録を作成する」を押す</strong><br>途中で「発言者の確認」画面が出たら、推定された発言者を確認します（違っている所だけ直せば OK）。数十秒〜数分で完成します。</li>
+    <li><strong>確認して保存する</strong><br>「確認してほしい箇所」を見ながら本文を直接修正し、Word などで保存します。</li>
+  </ol>
+  <h3 class="help-h">情報の取り扱いについて</h3>
+  <ul class="help-list">
+    <li>入力した内容・作成した議事録は、このツールやサーバーに<strong>一切保存されません</strong>。画面を閉じる・再読み込みすると消去されます。</li>
+    <li>議事録の作成時のみ、内容を Google の Gemini API（有料契約）へ送信します。有料契約の API では、送信した内容が AI の学習に使われることはありません。</li>
+    <li>音声ファイルは処理のために一時的に Google へ送られ、処理が終わるとすぐに削除命令を送ります。</li>
+  </ul>
+</template>
+
+<script src="vendor/mammoth.browser.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/docx.iife.js"></script>
+<script src="vendor/docx-math.iife.js"></script>
+<script src="vendor/docx-html.iife.js"></script>
+<script src="config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/files.js"></script>
+<script src="js/gemini.js"></script>
+<script src="js/prompts.js"></script>
+<script src="js/exporter.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
