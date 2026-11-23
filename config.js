@@ -12,7 +12,7 @@ window.GIJIROKU_CONFIG = {
   // 設定すると、利用者は接続キーを登録せずに使えます（キーは中継サーバー側で管理）。
   // 例: "https://gijiroku-proxy.example.workers.dev"
   // ※ workers.dev 以外のドメインを使う場合は index.html の connect-src にも追記してください。
-  PROXY_URL: "",
+    PROXY_URL: "https://gijiroku-proxy.w-b3228ki.workers.dev",
 
   // 使用するモデルを固定する場合に指定（例: "gemini-3.7-flash"）。
   // 空欄の場合は、利用可能なモデルから自動で選びます。
